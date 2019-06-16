@@ -1,0 +1,336 @@
+#include <iostream>
+#include <vector>
+#include <list>
+
+using namespace std;
+
+template<class ValueType> class Set{
+public:
+    typedef typename list<ValueType>::const_iterator iterator;
+public:
+    list<ValueType> l;
+    struct Node{
+        int length = 0;
+        Node *parent = nullptr;
+        iterator mx;
+        Node* sons[4];
+        iterator keys[4];
+        Node(iterator new_key) {
+            mx = keys[0] = new_key;
+        }
+
+        Node() {
+        }
+
+        void update() {
+            keys[0] = sons[0]->mx;
+            keys[1] = sons[1]->mx;
+        }
+
+        Node(Node* a, Node* b) {
+            length = 2;
+            sons[0] = a;
+            sons[1] = b;
+            mx = b->mx;
+            a->parent = this;
+            b->parent = this;
+            update();
+        }
+    };
+    Node *root = nullptr;
+public:
+    Set() {
+    }
+
+    void relax(Node *root) {
+        if (!root) return;
+        if (!root->length) {
+            root->mx = root->keys[0];
+            return;
+        }
+        root->mx = root->sons[root->length - 1]->mx;
+    }
+
+    void sort_sons(Node *root) {
+        if (!root->length) return;
+        for (int i = 0; i < root->length; ++i) {
+            for (int j = i + 1; j < root->length; ++j) {
+                if (*root->sons[j]->mx < *root->sons[i]->mx) {
+                    swap(root->sons[i], root->sons[j]);
+                }
+            }
+        }
+        relax(root);
+    }
+
+    void upd(Node* a) {
+        for (int i = 0; i < a->length; ++i) {
+            a->keys[i] = a->sons[i]->mx;
+        }
+        if (!a->length) {
+            a->mx = a->keys[0];
+        } else {
+            a->mx = a->sons[a->length - 1]->mx;
+        }
+    }
+
+    void updateKeys(Node* t) {
+        if (!t) return;
+        Node *a = t->parent;
+        while (a != nullptr) {
+            upd(a);
+            a = a->parent;
+        }
+        return;
+    }
+
+    void split(Node* t) {
+        if (t->length > 3) {
+            Node* a = new Node(t->sons[2], t->sons[3]);
+            t->length = 2;
+            t->sons[2] = nullptr;
+            t->sons[3] = nullptr;
+            relax(t);
+            if (t->parent != nullptr) {
+                t->parent->sons[t->parent->length++] = a;
+                a->parent = t->parent;
+                sort_sons(t->parent);
+                split(t->parent);
+            } else {
+                root = new Node(t, a);
+            }
+        }
+    }
+
+    Node* search(const ValueType &x, bool &is_end) const {
+        if (!root) return nullptr;
+        Node *t = root;
+        while (t->length > 0) {
+            if (t->length == 2) {
+                if (!(*t->keys[0] < x)) {
+                    t = t->sons[0];
+                } else {
+                    t = t->sons[1];
+                }
+            } else if (!(*t->keys[0] < x)) {
+                t = t->sons[0];
+            } else if (!(*t->keys[1] < x)) {
+                t = t->sons[1];
+            } else {
+                t = t->sons[2];
+            }
+        }
+        if (*t->mx < x) {
+            is_end = true;
+        }
+        return t;
+    }
+
+    void insert(const ValueType& x) {
+        if (root == nullptr) {
+            l.push_back(x);
+            root = new Node(l.begin());
+            relax(root);
+            return;
+        }
+        bool is_end = false;
+        Node* a = search(x, is_end);
+        if (!(*a->mx < x) && !(x < *a->mx)) {
+            return;
+        }
+        iterator a_mx = a->mx;
+        if (is_end) {
+            ++a_mx;
+        }
+        l.insert(a_mx, x);
+        --a_mx;
+        Node* n = new Node(a_mx);
+        relax(n);
+        if (a->parent == nullptr) {
+            if (x < *root->mx) {
+                root = new Node(n, root);
+            } else {
+                root = new Node(root, n);
+            }
+            updateKeys(root);
+            relax(root);
+        } else {
+            Node* p = a->parent;
+            p->sons[p->length++] = n;
+            n->parent = p;
+            relax(p);
+            sort_sons(p);
+            updateKeys(n);
+            split(p);
+        }
+        updateKeys(n);
+    }
+
+    void erase_node(Node *t) {
+        if (t->parent == nullptr) {
+            delete root;
+            root = nullptr;
+            return;
+        }
+        Node *p = t->parent;
+        if (p->length > 2) {
+            if (p->sons[0] == t) {
+                p->sons[0] = p->sons[1];
+            }
+
+            if (p->sons[2] != t) {
+                p->sons[1] = p->sons[2];
+            }
+
+            p->length = 2;
+            p->sons[2] = nullptr;
+            delete t;
+            updateKeys(p->sons[0]);
+            return;
+        }
+        Node *gp = p->parent;
+        if (p->sons[0] == t) {
+            p->sons[0] = p->sons[1];
+        }
+        delete t;
+        if (gp == nullptr) {
+            root = p->sons[0];
+            delete p;
+            root->parent = nullptr;
+            relax(root);
+            return;
+        } else {
+            Node *np = nullptr;
+            int ind_p, ind_np;
+            if (gp->sons[0] == p) {
+                np = gp->sons[1];
+                ind_p = 0;
+                ind_np = 1;
+            } else if (gp->sons[1] == p) {
+                np = gp->sons[0];
+                ind_p = 1;
+                ind_np = 0;
+            } else {
+                ind_p = 2;
+                ind_np = 1;
+                np = gp->sons[1];
+            }
+            if (np->length == 2) {
+                Node *b = p->sons[0];
+                b->parent = np;
+                np->sons[np->length++] = b;
+                p->length = 0;
+                p->sons[0] = p->sons[1] = p->sons[2] = p->sons[3] = nullptr;
+                sort_sons(np);
+                updateKeys(b);
+                erase_node(p);
+            } else {
+                if (ind_p < ind_np) {
+                    Node *b = np->sons[0];
+                    b->parent = p;
+                    p->sons[1] = b;
+                    np->sons[0] = np->sons[1];
+                    np->sons[1] = np->sons[2];
+                    np->sons[2] = nullptr;
+                    np->length = 2;
+                    updateKeys(np->sons[0]);
+                    updateKeys(b);
+                } else {
+                    Node *b = np->sons[2];
+                    np->length = 2;
+                    np->sons[2] = nullptr;
+                    p->sons[1] = p->sons[0];
+                    p->sons[0] = b;
+                    b->parent = p;
+                    updateKeys(np->sons[0]);
+                    updateKeys(b);
+                }
+            }
+        }
+    }
+
+    void erase(const ValueType& x) {
+        if (!root) return;
+        bool is_end = false;
+        Node *t = search(x, is_end);
+        if (is_end) {
+            return;
+        }
+        if (*t->mx < x || x < *t->mx) return;
+        l.erase(t->mx);
+        erase_node(t);
+    }
+
+    const size_t size() const {
+        return l.size();
+    }
+
+    const bool empty() const {
+        return l.empty();
+    }
+
+    iterator begin() const {
+        return l.cbegin();
+    }
+
+    iterator end() const {
+        return l.cend();
+    }
+
+    template <typename InputIterator>
+    Set(InputIterator first, InputIterator last) {
+        while (first != last) {
+            insert(*first);
+            ++first;
+        }
+    }
+
+    Set(std::initializer_list<ValueType> list_to_add) : Set(list_to_add.begin(), list_to_add.end()) {
+    }
+
+    void clear() {
+        while (!empty()) {
+            erase(*begin());
+        }
+    }
+
+    Set& operator= (const Set& second) {
+        if (this == &second)
+            return *this;
+        clear();
+        for (auto it1 = second.begin(); it1 != second.end(); ++it1) {
+            insert(*it1);
+        }
+        return *this;
+    }
+
+    iterator lower_bound(const ValueType& x) const {
+        if (!root) return end();
+        if (*root->mx < x) {
+            return end();
+        }
+        bool flag = false;
+        auto ret = search(x, flag);
+        if (flag) {
+            return end();
+        }
+        return ret->mx;
+    }
+
+
+    iterator find(const ValueType& x) const {
+        auto it = lower_bound(x);
+        if (!(*it < x) && !(x < *it)) {
+            return it;
+        }
+        return end();
+    }
+
+    Set(const Set& second) {
+        *this = second;
+    }
+
+    ~Set() {
+        clear();
+    }
+};
