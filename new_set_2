@@ -126,48 +126,48 @@ public:
     }
 
     void insert(const ValueType& x) {
-        if (root == nullptr) {
-            l.push_back(x);
-            root = new Node(l.begin());
-            relax(root);
-            return;
-        }
-        bool is_end = false;
-        Node* a = search(x, is_end);
-        if (!(*a->mx < x) && !(x < *a->mx)) {
-            return;
-        }
-        iterator a_mx = a->mx;
-        if (is_end) {
-            ++a_mx;
-        }
-        l.insert(a_mx, x);
-        --a_mx;
-        Node *n;
         try {
-            n = new Node(a_mx);
+            if (root == nullptr) {
+                l.push_back(x);
+                root = new Node(l.begin());
+                relax(root);
+                return;
+            }
+            bool is_end = false;
+            Node *a = search(x, is_end);
+            if (!(*a->mx < x) && !(x < *a->mx)) {
+                return;
+            }
+            iterator a_mx = a->mx;
+            if (is_end) {
+                ++a_mx;
+            }
+            l.insert(a_mx, x);
+            --a_mx;
+            Node *n = new Node(a_mx);
+            relax(n);
+            if (a->parent == nullptr) {
+                if (x < *root->mx) {
+                    root = new Node(n, root);
+                } else {
+                    root = new Node(root, n);
+                }
+                updateKeys(root);
+                relax(root);
+            } else {
+                Node *p = a->parent;
+                p->sons[p->length++] = n;
+                n->parent = p;
+                relax(p);
+                sort_sons(p);
+                updateKeys(n);
+                split(p);
+            }
+            updateKeys(n);
         } catch (...) {
+            clear();
             throw;
         }
-        relax(n);
-        if (a->parent == nullptr) {
-            if (x < *root->mx) {
-                root = new Node(n, root);
-            } else {
-                root = new Node(root, n);
-            }
-            updateKeys(root);
-            relax(root);
-        } else {
-            Node* p = a->parent;
-            p->sons[p->length++] = n;
-            n->parent = p;
-            relax(p);
-            sort_sons(p);
-            updateKeys(n);
-            split(p);
-        }
-        updateKeys(n);
     }
 
     void erase_three_sons(Node *t) {
